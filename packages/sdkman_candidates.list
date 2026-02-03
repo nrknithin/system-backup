@@ -1,8 +1,0 @@
-=== java ===
-java:17.0.18-tem:CURRENT
-java:21.0.9-sem
-=== maven ===
-maven:3.9.11:CURRENT
-maven:3.9.9
-=== quarkus ===
-quarkus:3.27.1:CURRENT
