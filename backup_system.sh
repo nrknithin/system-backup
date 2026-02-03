@@ -15,26 +15,42 @@ echo "Backup directory: $BACKUP_DIR"
 echo "Timestamp: $TIMESTAMP"
 echo ""
 
+# 1. Create/checkout user-specific git branch FIRST
+echo "[1/12] Setting up git branch..."
+BRANCH_NAME="ubuntu-$USER"
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    # Check if branch already exists
+    if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+        echo "  - Checking out existing branch: $BRANCH_NAME"
+        git checkout "$BRANCH_NAME" 2>/dev/null || echo "  - Failed to checkout branch"
+    else
+        echo "  - Creating and checking out new branch: $BRANCH_NAME"
+        git checkout -b "$BRANCH_NAME" 2>/dev/null || echo "  - Failed to create branch"
+    fi
+else
+    echo "  - Not a git repository, skipping branch creation"
+fi
+
 # Create backup directories
 mkdir -p "$BACKUP_DIR/packages"
 mkdir -p "$BACKUP_DIR/configs"
 mkdir -p "$BACKUP_DIR/env"
 
-# 1. Backup APT packages
-echo "[1/11] Backing up APT packages..."
+# 2. Backup APT packages
+echo "[2/12] Backing up APT packages..."
 dpkg --get-selections > "$BACKUP_DIR/packages/apt_packages.list"
 apt-mark showmanual > "$BACKUP_DIR/packages/apt_manual.list"
 echo "  - Saved $(wc -l < "$BACKUP_DIR/packages/apt_packages.list") packages"
 
 # 2. Backup APT sources
-echo "[2/11] Backing up APT sources..."
+echo "[3/12] Backing up APT sources..."
 if [ -d /etc/apt/sources.list.d ]; then
     cp -r /etc/apt/sources.list.d "$BACKUP_DIR/configs/" 2>/dev/null || true
 fi
 cp /etc/apt/sources.list "$BACKUP_DIR/configs/sources.list" 2>/dev/null || true
 
 # 3. Backup Snap packages
-echo "[3/11] Backing up Snap packages..."
+echo "[4/12] Backing up Snap packages..."
 if command -v snap &> /dev/null; then
     snap list > "$BACKUP_DIR/packages/snap_packages.list" 2>/dev/null || echo "No snap packages installed"
 else
@@ -42,7 +58,7 @@ else
 fi
 
 # 4. Backup Flatpak packages
-echo "[4/11] Backing up Flatpak packages..."
+echo "[5/12] Backing up Flatpak packages..."
 if command -v flatpak &> /dev/null; then
     flatpak list --app --columns=application > "$BACKUP_DIR/packages/flatpak_packages.list" 2>/dev/null || echo "No flatpak packages installed"
 else
@@ -50,7 +66,7 @@ else
 fi
 
 # 5. Backup Python packages
-echo "[5/11] Backing up Python packages..."
+echo "[6/12] Backing up Python packages..."
 if command -v pip3 &> /dev/null; then
     pip3 list --format=freeze > "$BACKUP_DIR/packages/pip3_packages.list" 2>/dev/null || true
 fi
@@ -59,7 +75,7 @@ if command -v pip &> /dev/null; then
 fi
 
 # 6. Backup NVM and Node.js
-echo "[6/11] Backing up NVM and Node.js..."
+echo "[7/12] Backing up NVM and Node.js..."
 if [ -d "$HOME/.nvm" ]; then
     # Backup NVM versions
     echo "NVM_DIR=$HOME/.nvm" > "$BACKUP_DIR/packages/nvm_config.txt"
@@ -95,7 +111,7 @@ else
 fi
 
 # 7. Backup SDKMAN candidates
-echo "[7/11] Backing up SDKMAN candidates..."
+echo "[8/12] Backing up SDKMAN candidates..."
 if [ -d "$HOME/.sdkman" ]; then
     echo "SDKMAN_DIR=$HOME/.sdkman" > "$BACKUP_DIR/packages/sdkman_config.txt"
     
@@ -133,11 +149,11 @@ else
 fi
 
 # 8. Backup environment variables
-echo "[8/11] Backing up environment variables..."
+echo "[9/12] Backing up environment variables..."
 printenv | sort > "$BACKUP_DIR/env/environment_variables.list"
 
 # 9. Backup shell configuration files
-echo "[9/11] Backing up shell configuration files..."
+echo "[10/12] Backing up shell configuration files..."
 for file in ~/.bashrc ~/.bash_profile ~/.profile ~/.zshrc ~/.zsh_profile; do
     if [ -f "$file" ]; then
         cp "$file" "$BACKUP_DIR/configs/" 2>/dev/null || true
@@ -146,7 +162,7 @@ for file in ~/.bashrc ~/.bash_profile ~/.profile ~/.zshrc ~/.zsh_profile; do
 done
 
 # 10. Backup system information
-echo "[10/11] Backing up system information..."
+echo "[11/12] Backing up system information..."
 cat > "$BACKUP_DIR/system_info.txt" << EOF
 System Information
 ==================
@@ -170,8 +186,8 @@ User: $USER
 Home: $HOME
 EOF
 
-# 11. Create system restore script
-echo "[11/11] Creating restore script..."
+# 12. Create system restore script
+echo "[12/12] Creating restore script..."
 cat > "$BACKUP_DIR/restore_system.sh" << 'RESTORE_SCRIPT'
 #!/bin/bash
 
@@ -387,6 +403,14 @@ echo ""
 RESTORE_SCRIPT
 
 chmod +x "$BACKUP_DIR/restore_system.sh"
+
+# Stage and commit the backup files
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    echo ""
+    echo "Committing backup files to branch ubuntu-$USER..."
+    git add . 2>/dev/null || true
+    git commit -m "Backup system configuration for $USER on $(date +%Y-%m-%d)" 2>/dev/null || echo "  - No changes to commit"
+fi
 
 echo ""
 echo "=========================================="
